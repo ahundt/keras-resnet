@@ -8,6 +8,14 @@ It gets down to 0.65 test logloss in 25 epochs, and down to 0.55 after 50 epochs
 '''
 
 from __future__ import print_function
+
+import time
+import csv
+import os
+import datetime
+import tensorflow as tf
+import numpy as np
+
 from keras.datasets import cifar10
 from keras.preprocessing.image import ImageDataGenerator
 from keras.models import Sequential
@@ -17,20 +25,18 @@ from keras.utils import np_utils
 from keras.callbacks import TensorBoard
 from keras.callbacks import CSVLogger
 from keras.callbacks import ModelCheckpoint
-import time
-import csv
-import os
+
+import matplotlib.pyplot as plt
 
 import resnet
-import datetime
 
 # http://stackoverflow.com/a/5215012/99379
 def timeStamped(fname, fmt='%Y-%m-%d-%H-%M-%S_{fname}'):
     return datetime.datetime.now().strftime(fmt).format(fname=fname)
 
-batch_sizes = [16,32,64]
+batch_sizes = [16]#[16,32,64]
 nb_classes = 10
-nb_epoch = 50
+nb_epoch = 10
 data_augmentation = True
 
 # input image dimensions
@@ -38,10 +44,25 @@ img_rows, img_cols = 32, 32
 # The CIFAR10 images are RGB.
 img_channels = 3
 
+out_dir=''
+dirname=''
+
 # Compile and train different models while meauring performance.
 results = []
+avg_time_results = []
 for batch_size in batch_sizes:
 
+    sess = tf.Session()
+
+    from keras import backend as K
+    K.set_session(sess)
+    
+
+    dirname = timeStamped(str(batch_size) + 'batch_cifar10_resnet')
+    out_dir='/home/ahundt/datasets/parallel/'+dirname+'/'
+    
+    print('Running a new session in : ' + out_dir)
+    
     # The data, shuffled and split between train and test sets:
     (X_train, y_train), (X_test, y_test) = cifar10.load_data()
     print('X_train shape:', X_train.shape)
@@ -58,7 +79,7 @@ for batch_size in batch_sizes:
 
     # Let's train the model using RMSprop
     model.compile(loss='categorical_crossentropy',
-                  optimizer='adam',
+                  optimizer='rmsprop',
                   metrics=['accuracy'])
 
     X_train = X_train.astype('float32')
@@ -91,8 +112,6 @@ for batch_size in batch_sizes:
         # Compute quantities required for featurewise normalization
         # (std, mean, and principal components if ZCA whitening is applied).
         datagen.fit(X_train)
-        dirname = timeStamped(str(batch_size) + 'batch_cifar10_resnet')
-        out_dir='/home/ahundt/datasets/parallel/'+dirname+'/'
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         
@@ -111,38 +130,53 @@ for batch_size in batch_sizes:
                             callbacks =[tensorboard,csv,model_checkpoint])
 
         end_fit_time = time.time()
-        average_time_per_epoch = (end_fit_time - start_time) / epochs
+        average_time_per_epoch = (end_fit_time - start_time) / nb_epoch
         
         model.predict(X_test, batch_size=batch_size, verbose=1)
 
         end_predict_time = time.time()
-        average_time_to_predict = (end_predict_time - end_fit_time) / epochs
+        average_time_to_predict = (end_predict_time - end_fit_time) / nb_epoch
 
         results.append((history, average_time_per_epoch, average_time_to_predict))
-        # Compare models' accuracy, loss and elapsed time per epoch.
-        plt.ioff()
-        plt.style.use('ggplot')
-        ax1 = plt.subplot2grid((2, 2), (0, 0))
-        ax1.set_title('Accuracy')
-        ax1.set_ylabel('Validation Accuracy')
-        ax1.set_xlabel('Epochs')
-        ax2 = plt.subplot2grid((2, 2), (1, 0))
-        ax2.set_title('Loss')
-        ax2.set_ylabel('Validation Loss')
-        ax2.set_xlabel('Epochs')
-        ax3 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
-        ax3.set_title('Time')
-        ax3.set_ylabel('Seconds')
-        for mode, result in zip(modes, results):
-            ax1.plot(result[0].epoch, result[0].history['val_acc'], label=mode)
-            ax2.plot(result[0].epoch, result[0].history['val_loss'], label=mode)
-        ax1.legend()
-        ax2.legend()
-        ax3.bar(np.arange(len(results)), [x[1] for x in results],
-                tick_label=modes, align='center')
-        plt.tight_layout()
-        plt.savefig('/home/ahundt/datasets/parallel/'+dirname+'/'+dirname+'_fig.png')
+        print ('--------------------------------------------------------------------')
+        print ('[run_name,batch_size,average_time_per_epoch,average_time_to_predict]')
+        print ([dirname,batch_size,average_time_per_epoch,average_time_to_predict])
+        print ('--------------------------------------------------------------------')
         
-        with open(out_dir+dirname+"_results.csv", "wb") as f:
-            writer = csv.writer(f)
-            writer.writerows(results)
+        # Close the Session when we're done.
+        sess.close()
+        
+            
+
+# Compare models' accuracy, loss and elapsed time per epoch.
+plt.ioff()
+plt.style.use('ggplot')
+ax1 = plt.subplot2grid((2, 2), (0, 0))
+ax1.set_title('Accuracy')
+ax1.set_ylabel('Validation Accuracy')
+ax1.set_xlabel('Epochs')
+ax2 = plt.subplot2grid((2, 2), (1, 0))
+ax2.set_title('Loss')
+ax2.set_ylabel('Validation Loss')
+ax2.set_xlabel('Epochs')
+ax3 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+ax3.set_title('Time')
+ax3.set_ylabel('Seconds')
+for mode, result in zip(batch_sizes, results):
+    ax1.plot(result[0].epoch, result[0].history['val_acc'], label=mode)
+    ax2.plot(result[0].epoch, result[0].history['val_loss'], label=mode)
+ax1.legend()
+ax2.legend()
+ax3.bar(np.arange(len(results)), [x[1] for x in results],
+        tick_label=batch_sizes, align='center')
+plt.tight_layout()
+plt.savefig('/home/ahundt/datasets/parallel/'+dirname+'/'+dirname+'_fig.png')
+
+
+# with open(out_dir+dirname+"_avg_time_results.csv", "wb") as f:
+#      w = csv.writer(f)
+#      w.writerows(avg_time_results)
+#
+# with open(out_dir+dirname+"_results.csv", "wb") as f:
+#      w = csv.writer(f)
+#      w.writerows(results)
