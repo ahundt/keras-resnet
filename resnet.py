@@ -7,7 +7,7 @@ from keras.layers import (
     Flatten
 )
 from keras.layers.convolutional import (
-    Convolution2D,
+    AtrousConvolution2D,
     MaxPooling2D,
     AveragePooling2D
 )
@@ -27,7 +27,7 @@ else:
 # Helper to build a conv -> BN -> relu block
 def _conv_bn_relu(nb_filter, nb_row, nb_col, subsample=(1, 1)):
     def f(input):
-        conv = Convolution2D(nb_filter=nb_filter, nb_row=nb_row, nb_col=nb_col, subsample=subsample,
+        conv = AtrousConvolution2D(nb_filter=nb_filter, nb_row=nb_row, nb_col=nb_col, subsample=subsample,
                              init="he_normal", border_mode="same")(input)
         norm = BatchNormalization(mode=0, axis=CHANNEL_AXIS)(conv)
         return Activation("relu")(norm)
@@ -41,7 +41,7 @@ def _bn_relu_conv(nb_filter, nb_row, nb_col, subsample=(1, 1)):
     def f(input):
         norm = BatchNormalization(mode=0, axis=CHANNEL_AXIS)(input)
         activation = Activation("relu")(norm)
-        return Convolution2D(nb_filter=nb_filter, nb_row=nb_row, nb_col=nb_col, subsample=subsample,
+        return AtrousConvolution2D(nb_filter=nb_filter, nb_row=nb_row, nb_col=nb_col, subsample=subsample,
                              init="he_normal", border_mode="same")(activation)
 
     return f
@@ -59,7 +59,7 @@ def _shortcut(input, residual):
     shortcut = input
     # 1 X 1 conv if shape is different. Else identity.
     if stride_width > 1 or stride_height > 1 or not equal_channels:
-        shortcut = Convolution2D(nb_filter=residual._keras_shape[CHANNEL_AXIS],
+        shortcut = AtrousConvolution2D(nb_filter=residual._keras_shape[CHANNEL_AXIS],
                                  nb_row=1, nb_col=1,
                                  subsample=(stride_width, stride_height),
                                  init="he_normal", border_mode="valid")(input)
@@ -68,13 +68,13 @@ def _shortcut(input, residual):
 
 
 # Builds a residual block with repeating bottleneck blocks.
-def _residual_block(block_function, nb_filters, repetitions, is_first_layer=False):
+def _residual_block(block_function, nb_filters, repetitions, is_first_layer=False, atrous_rate=(1,1)):
     def f(input):
         for i in range(repetitions):
             init_subsample = (1, 1)
             if i == 0 and not is_first_layer:
                 init_subsample = (2, 2)
-            input = block_function(nb_filters=nb_filters, init_subsample=init_subsample)(input)
+            input = block_function(nb_filters=nb_filters, init_subsample=init_subsample, atrous_rate=(1,1))(input)
         return input
 
     return f
@@ -107,7 +107,7 @@ def bottleneck(nb_filters, init_subsample=(1, 1)):
 
 class ResNetBuilder(object):
     @staticmethod
-    def build(input_shape, num_outputs, block_fn, repetitions):
+    def build(input_shape, num_outputs, block_fn, repetitions, atrous_rate=(1,1) global_pool=True, include_root_block=True):
         """
         Builds a custom ResNet like architecture.
         :param input_shape: The input shape in the form (nb_channels, nb_rows, nb_cols)
@@ -119,6 +119,15 @@ class ResNetBuilder(object):
 
         :param repetitions: Number of repetitions of various block units.
         At each block unit, the number of filters are doubled and the input size is halved
+        
+        :param atrous_rate: The rate of atrous convolution, aka dialation, the size of the holes
+
+        :param global_pool: If True, we perform global average pooling before computing the
+          logits. Set to True for image classification, False for dense prediction.
+
+        :param include_root_block: If True, include the initial convolution followed by
+          max-pooling, if False excludes it. If excluded, `inputs` should be the
+          results of an activation-less convolution.
 
         :return: The keras model.
         """
@@ -129,21 +138,27 @@ class ResNetBuilder(object):
         if K.image_dim_ordering() == 'tf':
             input_shape = (input_shape[1], input_shape[2], input_shape[0])
 
-        input = Input(shape=input_shape)
-        conv1 = _conv_bn_relu(nb_filter=64, nb_row=7, nb_col=7, subsample=(2, 2))(input)
-        pool1 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="same")(conv1)
+        if include_root_block:
+            input = Input(shape=input_shape)
+            conv1 = _conv_bn_relu(nb_filter=64, nb_row=7, nb_col=7, subsample=(2, 2))(input)
+            pool1 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="same")(conv1)
 
-        block = pool1
+            block = pool1
+        else:
+            block = input_shape
+
         nb_filters = 64
         for i, r in enumerate(repetitions):
-            block = _residual_block(block_fn, nb_filters=nb_filters, repetitions=r, is_first_layer=i == 0)(block)
+            block = _residual_block(block_fn, nb_filters=nb_filters, repetitions=r, is_first_layer=i == 0, atrous_rate=atrous_rate)(block)
             nb_filters *= 2
 
+        net = block
         # Classifier block
-        pool2 = AveragePooling2D(pool_size=(block._keras_shape[ROW_AXIS],
-                                            block._keras_shape[COL_AXIS]),
+        if global_pool:
+            net = AveragePooling2D(pool_size=(block._keras_shape[ROW_AXIS],
+                                                block._keras_shape[COL_AXIS]),
                                  strides=(1, 1))(block)
-        flatten1 = Flatten()(pool2)
+        flatten1 = Flatten()(net)
         dense = Dense(output_dim=num_outputs, init="he_normal", activation="softmax")(flatten1)
 
         model = Model(input=input, output=dense)
