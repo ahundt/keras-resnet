@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 
 if K.image_dim_ordering() == 'tf':
     from keras.callbacks import TensorBoard
+    import tensorflow as tf
 
 import resnet
 
