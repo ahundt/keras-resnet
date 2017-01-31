@@ -104,7 +104,7 @@ def _residual_block(block_function, nb_filter, repetitions, is_first_layer=False
     return f
 
 
-def basic_block(nb_filter, init_subsample=(1, 1), is_first_block_of_first_layer=False):
+def basic_block(nb_filter, init_subsample=(1, 1), is_first_block_of_first_layer=False, atrous_rate=(1,1)):
     """Basic 3 X 3 convolution blocks for use on resnets with layers <= 34.
     Follows improved proposed scheme in http://arxiv.org/pdf/1603.05027v2.pdf
     """
@@ -116,6 +116,7 @@ def basic_block(nb_filter, init_subsample=(1, 1), is_first_block_of_first_layer=
                                  nb_row=3, nb_col=3,
                                  subsample=init_subsample,
                                  init="he_normal", border_mode="same",
+                                 atrous_rate=atrous_rate,
                                  W_regularizer=l2(0.0001))(input)
         else:
             conv1 = _bn_relu_conv(nb_filter=nb_filter, nb_row=3, nb_col=3, subsample=init_subsample)(input)
@@ -167,7 +168,7 @@ def handle_dim_ordering():
 
 class ResnetBuilder(object):
     @staticmethod
-    def build(input_shape, num_outputs, block, repetitions, atrous_rate=(1,1), global_pool=True, include_root_block=True):
+    def build(input_shape, num_outputs, block_fn, repetitions, atrous_rate=(1,1), global_pool=True, include_root_block=True, nb_filter=64):
         """Builds a custom ResNet like architecture.
         :param input_shape: The input shape in the form (nb_channels, nb_rows, nb_cols) when include_root_block == True, 
                             otherwise pass in an input tensor like from Input(shape=input_shape)
@@ -201,16 +202,15 @@ class ResnetBuilder(object):
             if K.image_dim_ordering() == 'tf':
                 input_shape = (input_shape[1], input_shape[2], input_shape[0])
             input = Input(shape=input_shape)
-            conv1 = _conv_bn_relu(nb_filter=64, nb_row=7, nb_col=7, subsample=(2, 2))(input)
+            conv1 = _conv_bn_relu(nb_filter=nb_filter, nb_row=7, nb_col=7, subsample=(2, 2))(input)
             pool1 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="same")(conv1)
 
             block = pool1
         else:
             block = input_shape
 
-        nb_filters = 64
         for i, r in enumerate(repetitions):
-            block = _residual_block(block, nb_filter=nb_filter, repetitions=r, is_first_layer=(i == 0))(block)
+            block = _residual_block(block_fn, nb_filter=nb_filter, repetitions=r, is_first_layer=(i == 0))(block)
             nb_filter *= 2
 
         # Last activation
