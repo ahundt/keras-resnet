@@ -127,7 +127,7 @@ for batch_size in batch_sizes:
                             samples_per_epoch=X_train.shape[0],
                             nb_epoch=nb_epoch,
                             validation_data=(X_test, Y_test),
-                            nb_epoch=nb_epoch, verbose=1, max_q_size=100,
+                            verbose=1, max_q_size=100,
                             callbacks=callbacks)
 
         end_fit_time = time.time()
