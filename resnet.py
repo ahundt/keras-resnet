@@ -167,7 +167,7 @@ def handle_dim_ordering():
 
 class ResnetBuilder(object):
     @staticmethod
-    def build(input_shape, num_outputs, block, repetitions, atrous_rate=(1,1) global_pool=True, include_root_block=True):
+    def build(input_shape, num_outputs, block, repetitions, atrous_rate=(1,1), global_pool=True, include_root_block=True):
         """Builds a custom ResNet like architecture.
         :param input_shape: The input shape in the form (nb_channels, nb_rows, nb_cols) when include_root_block == True, 
                             otherwise pass in an input tensor like from Input(shape=input_shape)
