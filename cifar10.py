@@ -11,6 +11,7 @@ from keras.datasets import cifar10
 from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import np_utils
 from keras.callbacks import ReduceLROnPlateau, CSVLogger, EarlyStopping, ModelCheckpoint
+from keras import backend as K
 import numpy as np
 import matplotlib.pyplot as plt
 
