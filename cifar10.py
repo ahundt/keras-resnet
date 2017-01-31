@@ -69,9 +69,9 @@ for batch_size in batch_sizes:
 
     X_train = X_train.astype('float32')
     X_test = X_test.astype('float32')
-    # TODO switch to ResNetBuilder.build calls, permute parameters in 3x3 grid, generate plots for final assignment, save models?
+    # TODO switch to ResnetBuilder.build calls, permute parameters in 3x3 grid, generate plots for final assignment, save models?
     # use https://github.com/fchollet/keras/blob/master/examples/lstm_benchmark.py
-    model = resnet.ResNetBuilder.build_resnet_18((img_channels, img_rows, img_cols), nb_classes)
+    model = resnet.ResnetBuilder.build_resnet_18((img_channels, img_rows, img_cols), nb_classes)
 
     # subtract mean and normalize
     mean_image = np.mean(X_train, axis=0)
