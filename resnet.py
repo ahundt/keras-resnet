@@ -167,9 +167,10 @@ def handle_dim_ordering():
 
 class ResnetBuilder(object):
     @staticmethod
-    def build(input_shape, num_outputs, block_fn, repetitions, atrous_rate=(1,1) global_pool=True, include_root_block=True):
+    def build(input_shape, num_outputs, block, repetitions, atrous_rate=(1,1) global_pool=True, include_root_block=True):
         """Builds a custom ResNet like architecture.
-        :param input_shape: The input shape in the form (nb_channels, nb_rows, nb_cols)
+        :param input_shape: The input shape in the form (nb_channels, nb_rows, nb_cols) when include_root_block == True, 
+                            otherwise pass in an input tensor like from Input(shape=input_shape)
 
         :param num_outputs: The number of outputs at final softmax layer
 
@@ -191,14 +192,14 @@ class ResnetBuilder(object):
         :return: The keras model.
         """
         handle_dim_ordering()
-        if len(input_shape) != 3:
-            raise Exception("Input shape should be a tuple (nb_channels, nb_rows, nb_cols)")
 
-        # Permute dimension order if necessary
-        if K.image_dim_ordering() == 'tf':
-            input_shape = (input_shape[1], input_shape[2], input_shape[0])
 
         if include_root_block:
+            if len(input_shape) != 3:
+                raise Exception("Input shape should be a tuple (nb_channels, nb_rows, nb_cols)")
+            # Permute dimension order if necessary
+            if K.image_dim_ordering() == 'tf':
+                input_shape = (input_shape[1], input_shape[2], input_shape[0])
             input = Input(shape=input_shape)
             conv1 = _conv_bn_relu(nb_filter=64, nb_row=7, nb_col=7, subsample=(2, 2))(input)
             pool1 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), border_mode="same")(conv1)
@@ -209,7 +210,7 @@ class ResnetBuilder(object):
 
         nb_filters = 64
         for i, r in enumerate(repetitions):
-            block = _residual_block(block_fn, nb_filter=nb_filter, repetitions=r, is_first_layer=(i == 0))(block)
+            block = _residual_block(block, nb_filter=nb_filter, repetitions=r, is_first_layer=(i == 0))(block)
             nb_filter *= 2
 
         # Last activation
