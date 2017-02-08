@@ -19,7 +19,7 @@ import csv
 import os
 
 
-if K.image_dim_ordering() == 'tf':
+if K.backend() == 'tensorflow':
     from keras.callbacks import TensorBoard
     import tensorflow as tf
 
@@ -51,7 +51,7 @@ results = []
 avg_time_results = []
 for batch_size in batch_sizes:
 
-    if K.image_dim_ordering() == 'tf':
+    if K.backend() == 'tensorflow':
         sess = tf.Session()
         from keras import backend as K
         K.set_session(sess)
@@ -122,7 +122,7 @@ for batch_size in batch_sizes:
         model_checkpoint = ModelCheckpoint(out_dir+'weights.hdf5', monitor='val_loss', verbose=0, save_best_only=True, save_weights_only=False, mode='auto')
         callbacks=[lr_reducer, early_stopper, csv]
         
-        if K.image_dim_ordering() == 'tf':
+        if K.backend() == 'tensorflow':
             tensorboard = TensorBoard(log_dir=out_dir, histogram_freq=10, write_graph=True)
             callbacks.append(tensorboard)
 
