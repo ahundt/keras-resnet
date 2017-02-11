@@ -177,7 +177,11 @@ ax2.legend()
 ax3.bar(np.arange(len(results)), [x[1] for x in results],
         tick_label=batch_sizes, align='center')
 plt.tight_layout()
-plt.savefig('/home/ahundt/datasets/parallel/'+dirname+'/'+dirname+'_fig.png')
+
+if not os.path.exists(out_dir):
+    os.makedirs(out_dir)
+
+plt.savefig(out_dir+dirname+'_fig.png')
 
 
 # with open(out_dir+dirname+"_avg_time_results.csv", "wb") as f:
